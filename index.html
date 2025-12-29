@@ -1,0 +1,2244 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<title>Mahdi Due Tracker</title>
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet" />
+<link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.10.5/font/bootstrap-icons.css" rel="stylesheet" />
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.5.28/jspdf.plugin.autotable.min.js"></script>
+<script src="https://cdn.sheetjs.com/xlsx-latest/package/dist/xlsx.full.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<style>
+  body {
+    background: #f0f2f5;
+    font-family: Arial, sans-serif;
+    display: flex;
+  }
+  .sidebar {
+    width: 220px;
+    background-color: #87CEEB;
+    padding: 20px;
+    height: 100vh;
+    position: fixed;
+    top: 0;
+    left: 0;
+    display: flex;
+    flex-direction: column;
+    border-right: 1px solid #dee2e6;
+    transition: left 0.3s ease;
+  }
+  .sidebar.hidden {
+    left: -220px;
+  }
+  .sidebar .logo-container {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    margin-bottom: 20px;
+    cursor: pointer;
+  }
+  .sidebar .logo-circle {
+    width: 45px;
+    height: 45px;
+    background-color: #0d6efd;
+    color: white;
+    border-radius: 50%;
+    font-weight: 700;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    font-size: 1.4rem;
+    user-select: none;
+  }
+  .sidebar h1 {
+    margin-top: 10px;
+    font-size: 1.2rem;
+    font-weight: 700;
+    color: #1c3d5a;
+    text-align: center;
+  }
+  .sidebar .nav-buttons button {
+    width: 100%;
+    margin-bottom: 8px;
+    font-size: 14px;
+    text-align: left;
+    padding: 10px 15px;
+  }
+  .sidebar .nav-buttons .btn {
+    background-color: #6c757d !important;
+    border-color: #6c757d !important;
+    color: #ffffff !important;
+  }
+  .sidebar .nav-buttons .btn:hover {
+    background-color: #5a6268 !important;
+    border-color: #545b62 !important;
+  }
+  .main-content {
+    margin-left: 220px;
+    padding: 20px;
+    width: calc(100% - 220px);
+    transition: margin-left 0.3s ease, width 0.3s ease;
+  }
+  .main-content.expanded {
+    margin-left: 0;
+    width: 100%;
+  }
+  header {
+    display: flex;
+    align-items: center;
+    margin-bottom: 15px;
+    justify-content: space-between;
+  }
+  .sidebar-toggle {
+    font-size: 1.5rem;
+    cursor: pointer;
+    background: none;
+    border: none;
+    color: #0d6efd;
+  }
+  .page {
+    display: none;
+    opacity: 0;
+    transition: opacity 0.3s ease-in-out;
+  }
+  .page.active {
+    display: block;
+    opacity: 1;
+  }
+  .info-card {
+    background-color: white;
+    border-radius: 8px;
+    padding: 20px;
+    box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+    margin-bottom: 20px;
+  }
+  table th, table td {
+    vertical-align: middle !important;
+  }
+  .form-select, .form-control {
+    font-size: 14px;
+  }
+  .required-star {
+    color: red;
+    margin-left: 3px;
+  }
+  .modal-success .modal-header {
+    background-color: #198754;
+    color: white;
+  }
+  .modal-error .modal-header {
+    background-color: #dc3545;
+    color: white;
+  }
+  .login-container {
+    max-width: 400px;
+    margin: 50px auto;
+    padding: 30px;
+    border: 1px solid #ddd;
+    border-radius: 8px;
+    background-color: #fff;
+    box-shadow: 0 0 10px rgba(0,0,0,0.1);
+  }
+  .logged-in-user {
+    display: flex;
+    align-items: center;
+  }
+  .logged-in-user span {
+    margin-right: 10px;
+    font-weight: bold;
+    color: #0d6efd;
+  }
+  .due-collect-selection button {
+    margin-right: 10px;
+    margin-bottom: 10px;
+  }
+  .due-collect-table-container {
+      margin-top: 20px;
+      border: 1px solid #e9ecef;
+      border-radius: 5px;
+      overflow: hidden;
+  }
+  .filter-group {
+    display: flex;
+    align-items: flex-end;
+    gap: 10px;
+    margin-bottom: 10px;
+  }
+  .filter-group > div {
+    flex-grow: 1;
+  }
+  .filter-group .form-label {
+    margin-bottom: 5px;
+  }
+</style>
+</head>
+<body>
+
+<!-- Sidebar -->
+<div class="sidebar" id="mainSidebar" style="display: none;">
+  <div class="logo-container" onclick="showPage('dashboardPage')" style="cursor: pointer;">
+    <div class="logo-circle">MH</div>
+    <h1>Mahdi Due Tracker</h1>
+  </div>
+  <div class="nav-buttons" id="mainNavButtons">
+    <button class="btn" onclick="showPage('dashboardPage')"><i class="bi bi-bar-chart-line me-2"></i>Dashboard</button>
+    <button class="btn" onclick="showPage('dueListPage')"><i class="bi bi-card-list me-2"></i>Due List</button>
+    <button class="btn" onclick="showPage('incomingFundsPage')"><i class="bi bi-piggy-bank me-2"></i>Incoming Funds</button>
+    <button class="btn" onclick="showPage('dueCollectPage')"><i class="bi bi-collection me-2"></i>Due Collect</button>
+    <button class="btn" onclick="showPage('paidReportPage')"><i class="bi bi-patch-check me-2"></i>Paid Report</button>
+    <button class="btn" onclick="showPage('adminPage')"><i class="bi bi-sliders me-2"></i>Admin Panel</button>
+  </div>
+</div>
+
+<!-- Main Content -->
+<div class="main-content" id="mainContent">
+  <header>
+    <button class="sidebar-toggle" id="sidebarToggleBtn" onclick="toggleSidebar()" style="display: none;"><i class="bi bi-list"></i></button>
+    <div class="logged-in-user" id="loggedInUserDisplay" style="display: none;">
+      <span id="currentUsername"></span>
+      <button class="btn btn-outline-danger btn-sm" onclick="logout()">Logout</button>
+    </div>
+  </header>
+
+  <!-- Page: Login -->
+  <div id="loginPage" class="page active">
+    <div class="login-container">
+      <h4 class="mb-3 text-center">Login to Mahdi Due Tracker</h4>
+      <form id="loginForm" onsubmit="login(event)">
+        <div class="mb-3">
+          <label for="usernameInput" class="form-label">Username:</label>
+          <input type="text" id="usernameInput" class="form-control" required />
+        </div>
+        <div class="mb-3">
+          <label for="passwordInput" class="form-label">Password:</label>
+          <input type="password" id="passwordInput" class="form-control" required />
+        </div>
+        <button type="submit" class="btn btn-primary w-100">Login</button>
+      </form>
+      <div class="alert alert-danger mt-3" id="loginError" style="display:none;"></div>
+      <div class="mt-3 text-center">
+        <a href="#" onclick="showForgotPasswordModal()">Forgot Password?</a>
+      </div>
+    </div>
+  </div>
+
+  <!-- Page: Dashboard -->
+  <div id="dashboardPage" class="page">
+    <h4>Dashboard</h4>
+    <div class="row">
+        <div class="col-md-4">
+            <div class="info-card text-center">
+                <h5>Total Due</h5>
+                <h3 id="dashboardTotalDue" class="text-danger">0.00</h3>
+            </div>
+        </div>
+        <div class="col-md-4">
+            <div class="info-card text-center">
+                <h5>Total Incoming</h5>
+                <h3 id="dashboardTotalIncoming" class="text-success">0.00</h3>
+            </div>
+        </div>
+        <div class="col-md-4">
+            <div class="info-card text-center">
+                <h5>Total Paid</h5>
+                <h3 id="dashboardTotalPaid" class="text-warning">0.00</h3>
+            </div>
+        </div>
+    </div>
+    <div class="info-card">
+        <canvas id="analyticsChart"></canvas>
+    </div>
+  </div>
+
+  <!-- Page: Due List -->
+  <div id="dueListPage" class="page">
+    <h4>Due List Entry Form</h4>
+    <form id="dueEntryForm" onsubmit="addDueEntry(event)" class="mb-3">
+      <div class="row g-2 align-items-end">
+        <div class="col-md-3">
+          <label for="dueName" class="form-label">Name <span class="required-star">*</span></label>
+          <select id="dueName" class="form-select" required></select>
+        </div>
+        <div class="col-md-3">
+          <label for="duePurpose" class="form-label">Purpose <span class="required-star">*</span></label>
+          <input type="text" id="duePurpose" class="form-control" required />
+        </div>
+        <div class="col-md-2">
+          <label for="dueAmount" class="form-label">Amount <span class="required-star">*</span></label>
+          <input type="number" id="dueAmount" class="form-control" min="0" step="any" required />
+        </div>
+        <div class="col-md-2">
+          <label for="dueDate" class="form-label">Date <span class="required-star">*</span></label>
+          <input type="date" id="dueDate" class="form-control" required />
+        </div>
+        <div class="col-md-2">
+          <label for="dueStatus" class="form-label">Status <span class="required-star">*</span></label>
+          <select id="dueStatus" class="form-select" required>
+            <option value="Due" selected>Due</option>
+          </select>
+        </div>
+      </div>
+      <button type="submit" class="btn btn-primary mt-3">Add Due Entry</button>
+    </form>
+    <div class="row mb-2">
+      <div class="col-md-6 filter-group">
+        <div>
+          <label for="dueFilterName" class="form-label">Filter by Name:</label>
+          <select id="dueFilterName" class="form-select" onchange="filterDueList()">
+            <option value="all" selected>All</option>
+          </select>
+        </div>
+        <div>
+          <label for="dueSearchInput" class="form-label">Search:</label>
+          <input type="text" id="dueSearchInput" class="form-control" placeholder="Search name, purpose, amount, date..." onkeyup="searchDueList()" />
+        </div>
+      </div>
+      <div class="col-md-6 d-flex align-items-end justify-content-end">
+        <button class="btn btn-primary me-2" onclick="exportDuePDF()">Export PDF</button>
+        <button class="btn btn-success" onclick="exportDueExcel()">Export Excel</button>
+      </div>
+    </div>
+    <table id="dueTable" class="table table-bordered table-striped align-middle">
+      <thead class="table-primary">
+        <tr>
+          <th>Serial</th>
+          <th>Name</th>
+          <th>Purpose</th>
+          <th>Amount</th>
+          <th>Date</th>
+          <th>Status</th>
+          <th>Actions</th>
+        </tr>
+      </thead>
+      <tbody></tbody>
+      <tfoot>
+        <tr>
+          <th colspan="2">Total Due Amount</th>
+          <th id="dueTotalAmount" colspan="5"></th>
+        </tr>
+      </tfoot>
+    </table>
+  </div>
+
+  <!-- Page: Incoming Funds -->
+  <div id="incomingFundsPage" class="page">
+    <h4>Incoming Funds Entry Form</h4>
+    <form id="incomingEntryForm" onsubmit="addIncomingEntry(event)" class="mb-3">
+      <div class="row g-2 align-items-end">
+        <div class="col-md-3">
+          <label for="incomingName" class="form-label">Name <span class="required-star">*</span></label>
+          <select id="incomingName" class="form-select" required></select>
+        </div>
+        <div class="col-md-3">
+          <label for="incomingPurpose" class="form-label">Purpose <span class="required-star">*</span></label>
+          <input type="text" id="incomingPurpose" class="form-control" required />
+        </div>
+        <div class="col-md-2">
+          <label for="incomingAmount" class="form-label">Amount <span class="required-star">*</span></label>
+          <input type="number" id="incomingAmount" class="form-control" min="0" step="any" required />
+        </div>
+        <div class="col-md-2">
+          <label for="incomingDate" class="form-label">Date <span class="required-star">*</span></label>
+          <input type="date" id="incomingDate" class="form-control" required />
+        </div>
+        <div class="col-md-2">
+          <label for="incomingStatus" class="form-label">Status <span class="required-star">*</span></label>
+          <select id="incomingStatus" class="form-select" required>
+            <option value="Due" selected>Due</option>
+          </select>
+        </div>
+      </div>
+      <button type="submit" class="btn btn-success mt-3">Add Incoming Entry</button>
+    </form>
+    <div class="row mb-2">
+      <div class="col-md-6 filter-group">
+        <div>
+          <label for="incomingFilterName" class="form-label">Filter by Name:</label>
+          <select id="incomingFilterName" class="form-select" onchange="filterIncomingList()">
+            <option value="all" selected>All</option>
+          </select>
+        </div>
+        <div>
+          <label for="incomingSearchInput" class="form-label">Search:</label>
+          <input type="text" id="incomingSearchInput" class="form-control" placeholder="Search name, purpose, amount, date..." onkeyup="searchIncomingList()" />
+        </div>
+      </div>
+      <div class="col-md-6 d-flex align-items-end justify-content-end">
+        <button class="btn btn-primary me-2" onclick="exportIncomingPDF()">Export PDF</button>
+        <button class="btn btn-success" onclick="exportIncomingExcel()">Export Excel</button>
+      </div>
+    </div>
+    <table id="incomingTable" class="table table-bordered table-striped align-middle">
+      <thead class="table-success">
+        <tr>
+          <th>Serial</th>
+          <th>Name</th>
+          <th>Purpose</th>
+          <th>Amount</th>
+          <th>Date</th>
+          <th>Status</th>
+          <th>Actions</th>
+        </tr>
+      </thead>
+      <tbody></tbody>
+      <tfoot>
+        <tr>
+          <th colspan="2">Total Due Amount</th>
+          <th id="incomingTotalAmount" colspan="5"></th>
+        </tr>
+      </tfoot>
+    </table>
+  </div>
+
+  <!-- Page: Due Collect -->
+  <div id="dueCollectPage" class="page">
+    <h4>Due Collection</h4>
+    <div class="mb-3 due-collect-selection">
+      <button class="btn btn-primary" onclick="displayCollectionTable('due')">Collect from Due List</button>
+      <button class="btn btn-success" onclick="displayCollectionTable('incoming')">Collect from Incoming Funds</button>
+    </div>
+    <div id="dueCollectTableContainer" class="due-collect-table-container">
+      <p class="text-center text-muted p-3">Select a source (Due List or Incoming Funds) to start collecting.</p>
+    </div>
+  </div>
+
+  <!-- Page: Paid Report -->
+  <div id="paidReportPage" class="page">
+    <h4>Paid Report</h4>
+    <div class="row mb-2">
+      <div class="col-md-6 filter-group">
+        <div>
+          <label for="paidFilterCategory" class="form-label">Filter by Category:</label>
+          <select id="paidFilterCategory" class="form-select" onchange="filterPaidList()">
+            <option value="all" selected>All</option>
+          </select>
+        </div>
+        <div>
+          <label for="paidSearchInput" class="form-label">Search:</label>
+          <input type="text" id="paidSearchInput" class="form-control" placeholder="Search name, purpose, amount, date, receipt..." onkeyup="searchPaidReport()" />
+        </div>
+      </div>
+      <div class="col-md-6 d-flex align-items-end justify-content-end">
+        <button class="btn btn-primary me-2" onclick="exportPaidPDF()">Export PDF</button>
+        <button class="btn btn-success" onclick="exportPaidExcel()">Export Excel</button>
+        <h6 class="ms-3">Total Entries: <span id="paidCount">0</span></h6>
+      </div>
+    </div>
+    <table id="paidTable" class="table table-bordered table-striped align-middle">
+      <thead class="table-warning">
+        <tr>
+          <th>Serial</th>
+          <th>Receipt No.</th>
+          <th>Name</th>
+          <th>Purpose</th>
+          <th>Amount</th>
+          <th>Date</th>
+          <th>Status</th>
+          <th>Category</th>
+          <th>Actions</th>
+        </tr>
+      </thead>
+      <tbody></tbody>
+    </table>
+  </div>
+
+  <!-- Page: Admin Panel -->
+  <div id="adminPage" class="page">
+    <h4>Admin Panel</h4>
+    <div class="card mb-4">
+      <div class="card-header bg-primary text-white">
+        <h5>Add New Login User</h5>
+      </div>
+      <div class="card-body">
+        <form id="addLoginForm" onsubmit="addLoginUser(event)">
+          <div class="mb-3">
+            <label for="newUsernameInput" class="form-label">Username:</label>
+            <input type="text" id="newUsernameInput" class="form-control" required />
+          </div>
+          <div class="mb-3">
+            <label for="newPasswordInput" class="form-label">Password:</label>
+            <input type="password" id="newPasswordInput" class="form-control" required />
+          </div>
+          <div class="mb-3">
+            <label for="newSecurityQuestionInput" class="form-label">Security Question:</label>
+            <select id="newSecurityQuestionInput" class="form-select" required>
+              <option value="" disabled selected>Select a security question</option>
+              <option value="We need your number to proceed — could you confirm it?">We need your number to proceed — could you confirm it?</option>
+              <option value="We need your district to proceed - Could you confirm it?">We need your district to proceed - Could you confirm it?</option>
+              <option value="We need your secret number to verify you - could you confirm it?">We need your secret number to verify you - could you confirm it?</option>
+            </select>
+          </div>
+          <div class="mb-3">
+            <label for="newSecurityAnswerInput" class="form-label">Security Answer:</label>
+            <input type="text" id="newSecurityAnswerInput" class="form-control" required />
+          </div>
+          <button type="submit" class="btn btn-primary">Add Login User</button>
+        </form>
+      </div>
+    </div>
+    <div class="card mb-4">
+      <div class="card-header bg-success text-white">
+        <h5>Add Name for Dropdowns</h5>
+      </div>
+      <div class="card-body">
+        <form id="addDropdownNameForm" onsubmit="addDropdownName(event)">
+          <div class="mb-3">
+            <label for="newDropdownNameInput" class="form-label">Name:</label>
+            <input type="text" id="newDropdownNameInput" class="form-control" placeholder="Enter new name for dropdowns" required />
+          </div>
+          <button type="submit" class="btn btn-success">Add Name</button>
+        </form>
+      </div>
+    </div>
+    <div class="mb-3">
+      <button class="btn btn-secondary me-2" onclick="showLoginUsers()">Show Login Users</button>
+      <button class="btn btn-info me-2" onclick="showDropdownNames()">Show Dropdown Names</button>
+      <button class="btn btn-success ms-2" onclick="backupDatabase()">Backup Database</button>
+      <label class="btn btn-info ms-2 mb-0" for="restoreFileInput" style="cursor:pointer;">Restore Database</label>
+      <input type="file" id="restoreFileInput" style="display:none;" accept="application/json" onchange="restoreDatabase(event)" />
+    </div>
+    <div id="loginUserModal" class="modal" tabindex="-1">
+      <div class="modal-dialog modal-dialog-scrollable">
+        <div class="modal-content">
+          <div class="modal-header bg-primary text-white">
+            <h5 class="modal-title">Login Users List</h5>
+            <button type="button" class="btn-close btn-close-white" onclick="closeLoginUserModal()"></button>
+          </div>
+          <div class="modal-body">
+            <ul id="loginUserList" class="list-group"></ul>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div id="dropdownNameModal" class="modal" tabindex="-1">
+      <div class="modal-dialog modal-dialog-scrollable">
+        <div class="modal-content">
+          <div class="modal-header bg-success text-white">
+            <h5 class="modal-title">Dropdown Names List</h5>
+            <button type="button" class="btn-close btn-close-white" onclick="closeDropdownNameModal()"></button>
+          </div>
+          <div class="modal-body">
+            <ul id="dropdownNameList" class="list-group"></ul>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Modals -->
+<div class="modal fade" id="successModal" tabindex="-1" aria-hidden="true">
+  <div class="modal-dialog modal-dialog-centered">
+    <div class="modal-content modal-success">
+      <div class="modal-header">
+        <h5 class="modal-title">Success</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+      </div>
+      <div class="modal-body" id="successModalBody"></div>
+    </div>
+  </div>
+</div>
+<div class="modal fade" id="errorModal" tabindex="-1" aria-hidden="true">
+  <div class="modal-dialog modal-dialog-centered">
+    <div class="modal-content modal-error">
+      <div class="modal-header">
+        <h5 class="modal-title">Error</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+      </div>
+      <div class="modal-body" id="errorModalBody"></div>
+    </div>
+  </div>
+</div>
+<div class="modal fade" id="confirmationModal" tabindex="-1" aria-hidden="true">
+  <div class="modal-dialog modal-dialog-centered">
+    <div class="modal-content">
+      <div class="modal-header bg-warning text-dark">
+        <h5 class="modal-title">Confirmation</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+      </div>
+      <div class="modal-body" id="confirmationModalBody"></div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+        <button type="button" class="btn btn-primary" id="confirmActionButton">Confirm</button>
+      </div>
+    </div>
+  </div>
+</div>
+<div class="modal fade" id="editLoginUserModal" tabindex="-1" aria-hidden="true">
+  <div class="modal-dialog modal-dialog-centered">
+    <div class="modal-content">
+      <div class="modal-header bg-warning text-dark">
+        <h5 class="modal-title">Edit Login User</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+      </div>
+      <div class="modal-body">
+        <form id="editLoginForm">
+          <input type="hidden" id="editUserIndex" />
+          <div class="mb-3">
+            <label for="editUsernameInput" class="form-label">Username:</label>
+            <input type="text" id="editUsernameInput" class="form-control" required />
+          </div>
+          <div class="mb-3">
+            <label for="editPasswordInput" class="form-label">Password:</label>
+            <input type="password" id="editPasswordInput" class="form-control" placeholder="Leave empty to keep current password" />
+          </div>
+          <div class="mb-3">
+            <label for="editSecurityQuestionInput" class="form-label">Security Question:</label>
+            <select id="editSecurityQuestionInput" class="form-select">
+              <option value="" disabled selected>Select a security question</option>
+              <option value="We need your number to proceed — could you confirm it?">We need your number to proceed — could you confirm it?</option>
+              <option value="We need your district to proceed - Could you confirm it?">We need your district to proceed - Could you confirm it?</option>
+              <option value="We need your secret number to verify you - could you confirm it?">We need your secret number to verify you - could you confirm it?</option>
+            </select>
+          </div>
+          <div class="mb-3">
+            <label for="editSecurityAnswerInput" class="form-label">Security Answer:</label>
+            <input type="text" id="editSecurityAnswerInput" class="form-control" placeholder="Enter security answer" />
+          </div>
+          <button type="button" class="btn btn-primary w-100" onclick="saveEditedLoginUser()">Save Changes</button>
+        </form>
+      </div>
+    </div>
+  </div>
+</div>
+<div class="modal fade" id="forgotPasswordModal" tabindex="-1" aria-hidden="true">
+  <div class="modal-dialog modal-dialog-centered">
+    <div class="modal-content">
+      <div class="modal-header bg-info text-white">
+        <h5 class="modal-title">Reset Password</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+      </div>
+      <div class="modal-body">
+        <form id="resetPasswordForm" onsubmit="resetPassword(event)">
+          <div class="mb-3">
+            <label for="resetUsernameInput" class="form-label">Username:</label>
+            <input type="text" id="resetUsernameInput" class="form-control" required />
+          </div>
+          <div class="mb-3">
+            <label for="resetSecurityQuestionInput" class="form-label">Security Question:</label>
+            <select id="resetSecurityQuestionInput" class="form-select" required>
+              <option value="" disabled selected>Select your security question</option>
+              <option value="We need your number to proceed — could you confirm it?">We need your number to proceed — could you confirm it?</option>
+              <option value="We need your district to proceed - Could you confirm it?">We need your district to proceed - Could you confirm it?</option>
+              <option value="We need your secret number to verify you - could you confirm it?">We need your secret number to verify you - could you confirm it?</option>
+            </select>
+          </div>
+          <div class="mb-3">
+            <label for="resetSecurityAnswerInput" class="form-label">Security Answer:</label>
+            <input type="text" id="resetSecurityAnswerInput" class="form-control" required />
+          </div>
+          <div class="mb-3">
+            <label for="newPasswordResetInput" class="form-label">New Password:</label>
+            <input type="password" id="newPasswordResetInput" class="form-control" required />
+          </div>
+          <div class="mb-3">
+            <label for="confirmPasswordResetInput" class="form-label">Confirm New Password:</label>
+            <input type="password" id="confirmPasswordResetInput" class="form-control" required />
+          </div>
+          <button type="submit" class="btn btn-primary w-100">Reset Password</button>
+        </form>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+  const supabaseUrl = 'https://gytlvhvmklvmtxkacczr.supabase.co';
+  const supabaseKey = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imd5dGx2aHZta2x2bXR4a2FjY3pyIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTczMjM1OTMsImV4cCI6MjA3Mjg5OTU5M30.K5q80BNO4cLCXlXrVIp6_98oeCF6HS1z18V74Ol6UNo';
+  const _supabase = supabase.createClient(supabaseUrl, supabaseKey);
+</script>
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+<script>
+  // Data storage variables
+  let dueEntries = [];
+  let incomingEntries = [];
+  let paidEntries = [];
+  let loginUsers = [{ username: 'admin', password: 'password', securityQuestion: 'We need your number to proceed — could you confirm it?', securityAnswer: 'admin' }];
+  let dropdownNames = [];
+  let loggedInUser = null;
+  let receiptCounter = 0;
+  let analyticsChart = null;
+
+  // Global filter states
+  let currentDueFilter = 'all';
+  let currentIncomingFilter = 'all';
+  let currentPaidFilterCategory = 'all';
+
+  // Modal instances
+  const loginUserModal = new bootstrap.Modal(document.getElementById('loginUserModal'));
+  const dropdownNameModal = new bootstrap.Modal(document.getElementById('dropdownNameModal'));
+  const successModal = new bootstrap.Modal(document.getElementById('successModal'));
+  const successModalBody = document.getElementById('successModalBody');
+  const errorModal = new bootstrap.Modal(document.getElementById('errorModal'));
+  const errorModalBody = document.getElementById('errorModalBody');
+  const confirmationModal = new bootstrap.Modal(document.getElementById('confirmationModal'));
+  const confirmationModalBody = document.getElementById('confirmationModalBody');
+  const confirmActionButton = document.getElementById('confirmActionButton');
+  const editLoginUserModal = new bootstrap.Modal(document.getElementById('editLoginUserModal'));
+  const forgotPasswordModal = new bootstrap.Modal(document.getElementById('forgotPasswordModal'));
+  
+  let confirmCallback = null;
+
+  // Initialize page
+  document.addEventListener('DOMContentLoaded', async () => {
+    await loadData();
+    populateNameDropdowns();
+    document.getElementById('dueFilterName').value = currentDueFilter;
+    document.getElementById('incomingFilterName').value = currentIncomingFilter;
+    document.getElementById('paidFilterCategory').value = currentPaidFilterCategory;
+    renderDueList();
+    renderIncomingList();
+    renderPaidReport();
+    populatePaidCategoryFilter();
+    checkLoginStatus();
+  });
+
+  function toggleSidebar() {
+    document.getElementById('mainSidebar').classList.toggle('hidden');
+    document.getElementById('mainContent').classList.toggle('expanded');
+  }
+
+  function showPage(pageId) {
+    if (!loggedInUser && pageId !== 'loginPage') {
+      showError('Please login to access this page.');
+      showPage('loginPage');
+      return;
+    }
+    document.querySelectorAll('.page').forEach(page => {
+      page.classList.remove('active');
+    });
+    document.getElementById(pageId).classList.add('active');
+
+    if (pageId === 'dashboardPage') {
+      renderDashboard();
+    }
+  }
+
+  function checkLoginStatus() {
+    const storedUser = localStorage.getItem('loggedInUser');
+    const mainSidebar = document.getElementById('mainSidebar');
+    const mainContent = document.getElementById('mainContent');
+    const toggleBtn = document.getElementById('sidebarToggleBtn');
+
+    if (storedUser) {
+      loggedInUser = storedUser;
+      const userExists = loginUsers.some(user => String(user.username) === String(loggedInUser));
+      if (userExists) {
+        document.getElementById('currentUsername').textContent = loggedInUser;
+        document.getElementById('loggedInUserDisplay').style.display = 'flex';
+        mainSidebar.style.display = 'flex';
+        mainContent.classList.remove('expanded');
+        mainSidebar.classList.remove('hidden');
+        toggleBtn.style.display = 'block';
+        showPage('dashboardPage');
+      } else {
+        loggedInUser = null;
+        localStorage.removeItem('loggedInUser');
+        showError('Previous session data is invalid. Please log in again.');
+        mainSidebar.style.display = 'none';
+        mainContent.classList.add('expanded');
+        toggleBtn.style.display = 'none';
+        showPage('loginPage');
+        document.getElementById('loggedInUserDisplay').style.display = 'none';
+      }
+    } else {
+      loggedInUser = null;
+      mainSidebar.style.display = 'none';
+      mainContent.classList.add('expanded');
+      toggleBtn.style.display = 'none';
+      showPage('loginPage');
+      document.getElementById('loggedInUserDisplay').style.display = 'none';
+    }
+  }
+
+  function login(e) {
+    e.preventDefault();
+    const username = document.getElementById('usernameInput').value.trim();
+    const password = document.getElementById('passwordInput').value.trim();
+    const loginErrorDiv = document.getElementById('loginError');
+    const mainSidebar = document.getElementById('mainSidebar');
+    const mainContent = document.getElementById('mainContent');
+    const toggleBtn = document.getElementById('sidebarToggleBtn');
+
+    const userFound = loginUsers.find(user => user.username === username && user.password === password);
+
+    if (userFound) {
+      loggedInUser = username;
+      localStorage.setItem('loggedInUser', username);
+      document.getElementById('currentUsername').textContent = loggedInUser;
+      document.getElementById('loggedInUserDisplay').style.display = 'flex';
+      mainSidebar.style.display = 'flex';
+      mainContent.classList.remove('expanded');
+      mainSidebar.classList.remove('hidden');
+      toggleBtn.style.display = 'block';
+      loginErrorDiv.style.display = 'none';
+      showSuccess('Logged in successfully!');
+      showPage('dashboardPage');
+    } else {
+      loggedInUser = null;
+      localStorage.removeItem('loggedInUser');
+      loginErrorDiv.textContent = 'Invalid username or password. Please try again.';
+      loginErrorDiv.style.display = 'block';
+    }
+  }
+
+  function logout() {
+    showConfirmation('Are you sure you want to log out?', () => {
+      loggedInUser = null;
+      localStorage.removeItem('loggedInUser');
+      showSuccess('Logged out successfully!');
+      const mainSidebar = document.getElementById('mainSidebar');
+      const mainContent = document.getElementById('mainContent');
+      const toggleBtn = document.getElementById('sidebarToggleBtn');
+      mainSidebar.style.display = 'none';
+      mainContent.classList.add('expanded');
+      toggleBtn.style.display = 'none';
+      document.getElementById('loggedInUserDisplay').style.display = 'none';
+      showPage('loginPage');
+    });
+  }
+
+  function renderDashboard() {
+    const totalDue = dueEntries.reduce((sum, entry) => sum + entry.amount, 0);
+    const totalIncoming = incomingEntries.reduce((sum, entry) => sum + entry.amount, 0);
+    const totalPaid = paidEntries.reduce((sum, entry) => sum + entry.amount, 0);
+
+    document.getElementById('dashboardTotalDue').textContent = totalDue.toFixed(2);
+    document.getElementById('dashboardTotalIncoming').textContent = totalIncoming.toFixed(2);
+    document.getElementById('dashboardTotalPaid').textContent = totalPaid.toFixed(2);
+
+    const ctx = document.getElementById('analyticsChart').getContext('2d');
+    
+    if (analyticsChart) {
+        analyticsChart.destroy();
+    }
+
+    analyticsChart = new Chart(ctx, {
+        type: 'bar',
+        data: {
+            labels: ['Due List', 'Incoming Funds', 'Paid Report'],
+            datasets: [{
+                label: 'Total Amount',
+                data: [totalDue, totalIncoming, totalPaid],
+                backgroundColor: [
+                    'rgba(255, 99, 132, 0.5)',
+                    'rgba(75, 192, 192, 0.5)',
+                    'rgba(255, 206, 86, 0.5)',
+                ],
+                borderColor: [
+                    'rgba(255, 99, 132, 1)',
+                    'rgba(75, 192, 192, 1)',
+                    'rgba(255, 206, 86, 1)',
+                ],
+                borderWidth: 1
+            }]
+        },
+        options: {
+            scales: {
+                y: {
+                    beginAtZero: true
+                }
+            },
+            responsive: true,
+            maintainAspectRatio: false
+        }
+    });
+  }
+
+  async function loadData() {
+    try {
+      const { data: dueData, error: dueError } = await _supabase.from('due_entries').select('*');
+      if (dueError) throw dueError;
+      dueEntries = dueData.map(e => ({...e, isEditing: false, originalAmount: e.original_amount}));
+
+      const { data: incomingData, error: incomingError } = await _supabase.from('incoming_entries').select('*');
+      if (incomingError) throw incomingError;
+      incomingEntries = incomingData.map(e => ({...e, isEditing: false, originalAmount: e.original_amount}));
+
+      const { data: paidData, error: paidError } = await _supabase.from('paid_entries').select('*');
+      if (paidError) throw paidError;
+      paidEntries = paidData.map(e => ({...e, receiptNumber: e.receipt_number, sourceEntryId: e.source_entry_id}));
+
+      const { data: loginUsersData, error: loginUsersError } = await _supabase.from('login_users').select('*');
+      if (loginUsersError) throw loginUsersError;
+      loginUsers = loginUsersData.map(u => ({...u, securityQuestion: u.security_question, securityAnswer: u.security_answer}));
+       if (loginUsers.length === 0) {
+        const { data, error } = await _supabase.from('login_users').insert([{ username: 'admin', password: 'password', security_question: 'We need your number to proceed — could you confirm it?', security_answer: 'admin' }]).select();
+        if (error) throw error;
+        loginUsers = data.map(u => ({...u, securityQuestion: u.security_question, securityAnswer: u.security_answer}));
+      }
+
+
+      const { data: dropdownNamesData, error: dropdownNamesError } = await _supabase.from('dropdown_names').select('name');
+      if (dropdownNamesError) throw dropdownNamesError;
+      dropdownNames = dropdownNamesData.map(item => item.name);
+
+    } catch (error) {
+      showError(`Error loading data: ${error.message}`);
+    }
+  }
+
+  
+
+  function generateReceiptNumber() {
+      const date = new Date();
+      const year = date.getFullYear().toString().slice(-2);
+      const month = (date.getMonth() + 1).toString().padStart(2, '0');
+      const day = date.getDate().toString().padStart(2, '0');
+      const hour = date.getHours().toString().padStart(2, '0');
+      const minute = date.getMinutes().toString().padStart(2, '0');
+      const second = date.getSeconds().toString().padStart(2, '0');
+      const randomPart = Math.random().toString(36).substring(2, 7);
+      return `RC-${year}${month}${day}-${hour}${minute}${second}-${randomPart}`;
+  }
+
+  function cleanPurpose(purpose) {
+    let cleaned = purpose;
+    const regex = /\s*\(Collected:\s*[^)]+\)/g;
+    cleaned = cleaned.replace(regex, '').trim();
+    return cleaned;
+  }
+
+  function populateNameDropdowns() {
+    const dueNameSelect = document.getElementById('dueName');
+    const incomingNameSelect = document.getElementById('incomingName');
+    const dueFilter = document.getElementById('dueFilterName');
+    const incomingFilter = document.getElementById('incomingFilterName');
+    [dueNameSelect, incomingNameSelect, dueFilter, incomingFilter].forEach(select => {
+      let currentValue = '';
+      if (select === dueFilter) currentValue = currentDueFilter;
+      if (select === incomingFilter) currentValue = currentIncomingFilter;
+      select.innerHTML = '';
+      if (select === dueFilter || select === incomingFilter) {
+        select.innerHTML += '<option value="all">All</option>';
+      } else {
+        select.innerHTML += '<option value="" disabled selected>Select Name</option>';
+      }
+      dropdownNames.forEach(name => {
+        const option = document.createElement('option');
+        option.value = name;
+        option.textContent = name;
+        select.appendChild(option);
+      });
+      if (select === dueFilter) {
+          select.value = currentDueFilter;
+      } else if (select === incomingFilter) {
+          select.value = currentIncomingFilter;
+      } else if (dropdownNames.includes(currentValue)) {
+          select.value = currentValue;
+      } else {
+        select.value = "";
+      }
+    });
+  }
+
+  function renderDueList(dataToRender = null) {
+    populateNameDropdowns();
+    const tbody = document.querySelector('#dueTable tbody');
+    tbody.innerHTML = '';
+    let displayedData = dataToRender;
+    if (displayedData === null) {
+        displayedData = currentDueFilter === 'all' ? dueEntries : dueEntries.filter(e => String(e.name) === String(currentDueFilter));
+    }
+    displayedData.forEach((entry, index) => {
+      const tr = document.createElement('tr');
+      const nameCell = entry.isEditing ? `<select class="form-select" id="editDueName-${entry.id}">${getDropdownNamesOptions(entry.name)}</select>` : `<span>${entry.name}</span>`;
+      const purposeCell = entry.isEditing ? `<input type="text" class="form-control" value="${entry.purpose}" id="editDuePurpose-${entry.id}" />` : `<span>${entry.purpose}</span>`;
+      const amountCell = entry.isEditing ? `<input type="number" class="form-control" value="${entry.amount}" min="0" step="any" id="editDueAmount-${entry.id}" />` : `<span>${entry.amount}</span>`;
+      const dateCell = entry.isEditing ? `<input type="date" class="form-control" value="${entry.date}" id="editDueDate-${entry.id}" />` : `<span>${entry.date}</span>`;
+      const statusCell = `
+        <select class="form-select" id="editDueStatus-${entry.id}" onchange="updateDueEntryStatusFromSelect('${entry.id}', this.value)" ${entry.isEditing ? '' : 'disabled'}>
+          <option value="Due" ${entry.status === 'Due' ? 'selected' : ''}>Due</option>
+          <option value="Paid" ${entry.status === 'Paid' ? 'selected' : ''}>Paid</option>
+        </select>
+      `;
+      tr.innerHTML = `
+        <td>${index + 1}</td>
+        <td>${nameCell}</td>
+        <td>${purposeCell}</td>
+        <td>${amountCell}</td>
+        <td>${dateCell}</td>
+        <td>${statusCell}</td>
+        <td>
+          ${entry.isEditing ? `
+            <button class="btn btn-success btn-sm me-1" onclick="updateDueEntry('${entry.id}')">Update</button>
+            <button class="btn btn-secondary btn-sm" onclick="cancelDueEdit('${entry.id}')">Cancel</button>
+          ` : `
+            <button class="btn btn-warning btn-sm me-1" onclick="editDueEntry('${entry.id}')">Edit</button>
+            <button class="btn btn-danger btn-sm" onclick="deleteDueEntry('${entry.id}')">Delete</button>
+          `}
+        </td>
+      `;
+      tbody.appendChild(tr);
+    });
+    updateDueTotal(displayedData);
+  }
+
+  function getDropdownNamesOptions(selectedName) {
+    let options = ''; 
+    dropdownNames.forEach(name => {
+      const option = document.createElement('option');
+      option.value = name;
+      option.textContent = name;
+      if (String(name) === String(selectedName)) {
+        option.selected = true;
+      }
+      options += option.outerHTML; 
+    });
+    return options;
+  }
+
+  async function addDueEntry(e) {
+    e.preventDefault();
+    const name = document.getElementById('dueName').value;
+    const purpose = document.getElementById('duePurpose').value.trim();
+    const amount = document.getElementById('dueAmount').value.trim();
+    const date = document.getElementById('dueDate').value;
+    const status = document.getElementById('dueStatus').value;
+    if (!name || !purpose || !amount || !date) {
+      showError('Please fill all required fields');
+      return;
+    }
+    const newEntry = { name, purpose, amount: Number(amount), date, status, category: 'Due List', original_amount: Number(amount) };
+
+    try {
+      const { data, error } = await _supabase.from('due_entries').insert([newEntry]).select();
+      if (error) throw error;
+
+      dueEntries.push({...data[0], isEditing: false});
+      renderDueList();
+      clearDueForm();
+      showSuccess('Due entry added successfully');
+    } catch (error) {
+      showError(`Error adding due entry: ${error.message}`);
+    }
+  }
+
+  function clearDueForm() {
+    document.getElementById('dueEntryForm').reset();
+  }
+
+  function editDueEntry(entryId) {
+    dueEntries = dueEntries.map(entry => {
+      if (String(entry.id) === String(entryId)) {
+        entry.isEditing = true;
+      } else {
+        entry.isEditing = false;
+      }
+      return entry;
+    });
+    renderDueList();
+  }
+
+  function cancelDueEdit(entryId) {
+    const entry = dueEntries.find(e => String(e.id) === String(entryId));
+    if (entry) {
+        entry.isEditing = false;
+        renderDueList();
+    }
+  }
+
+  async function updateDueEntry(entryId) {
+    const entry = dueEntries.find(e => String(e.id) === String(entryId));
+    if (!entry) {
+        showError('Entry not found!');
+        renderDueList();
+        return;
+    }
+    const newNameInput = document.getElementById(`editDueName-${entry.id}`);
+    const newPurposeInput = document.getElementById(`editDuePurpose-${entry.id}`);
+    const newAmountInput = document.getElementById(`editDueAmount-${entry.id}`);
+    const newDateInput = document.getElementById(`editDueDate-${entry.id}`);
+    const newStatusSelect = document.getElementById(`editDueStatus-${entry.id}`);
+    if (!newNameInput || !newPurposeInput || !newAmountInput || !newDateInput || !newStatusSelect) {
+        showError('Could not find all input fields for update. Please try again.');
+        return;
+    }
+    const newName = newNameInput.value;
+    const newPurpose = newPurposeInput.value.trim();
+    const newAmount = newAmountInput.value.trim();
+    const newDate = newDateInput.value;
+    const newStatus = newStatusSelect.value;
+    if (!newName || !newPurpose || !newAmount || !newDate) {
+      showError('Please fill all required fields for update');
+      return;
+    }
+
+    const updatedEntry = {
+        name: newName,
+        purpose: newPurpose,
+        amount: Number(newAmount),
+        date: newDate,
+        status: newStatus
+    };
+
+    if (String(newStatus) === 'Paid') {
+        showConfirmation(`Marking this entry as PAID will move it to Paid Report. Are you sure?`, async () => {
+            try {
+                const paidRecord = {
+                    name: newName,
+                    purpose: newPurpose,
+                    amount: Number(newAmount),
+                    date: new Date().toISOString().split('T')[0],
+                    status: 'Paid',
+                    category: 'Due List',
+                    receipt_number: generateReceiptNumber(),
+                    source_entry_id: entry.id
+                };
+                const { data: paidData, error: paidError } = await _supabase.from('paid_entries').insert([paidRecord]).select();
+                if (paidError) throw paidError;
+                paidEntries.push(paidData[0]);
+
+                const { error: deleteError } = await _supabase.from('due_entries').delete().match({ id: entryId });
+                if (deleteError) throw deleteError;
+                dueEntries = dueEntries.filter(e => String(e.id) !== String(entryId));
+
+                renderDueList();
+                renderPaidReport();
+                showSuccess('Entry fully paid and moved to Paid Report.');
+            } catch (error) {
+                showError(`Error moving entry to paid: ${error.message}`);
+            }
+        }, () => {
+            renderDueList();
+            showError('Operation cancelled.');
+        });
+    } else {
+        try {
+            const { data, error } = await _supabase.from('due_entries').update(updatedEntry).match({ id: entryId }).select();
+            if (error) throw error;
+
+            const index = dueEntries.findIndex(e => String(e.id) === String(entryId));
+            dueEntries[index] = {...data[0], isEditing: false};
+
+            renderDueList();
+            showSuccess('Entry updated successfully.');
+        } catch (error) {
+            showError(`Error updating due entry: ${error.message}`);
+        }
+    }
+  }
+
+  async function updateDueEntryStatusFromSelect(entryId, value) {
+    const entry = dueEntries.find(e => String(e.id) === String(entryId));
+    if (!entry) {
+        return;
+    }
+    const oldStatus = entry.status;
+    if (String(value) === 'Paid') {
+        showConfirmation(`Marking this entry as PAID will move it to Paid Report. Are you sure?`, async () => {
+            try {
+                const paidRecord = {
+                    name: entry.name,
+                    purpose: entry.purpose,
+                    amount: entry.amount,
+                    date: new Date().toISOString().split('T')[0],
+                    status: 'Paid',
+                    category: 'Due List',
+                    receipt_number: generateReceiptNumber(),
+                    source_entry_id: entry.id
+                };
+                const { data: paidData, error: paidError } = await _supabase.from('paid_entries').insert([paidRecord]).select();
+                if (paidError) throw paidError;
+                paidEntries.push(paidData[0]);
+
+                const { error: deleteError } = await _supabase.from('due_entries').delete().match({ id: entryId });
+                if (deleteError) throw deleteError;
+                dueEntries = dueEntries.filter(e => String(e.id) !== String(entryId));
+
+                renderDueList();
+                renderPaidReport();
+                showSuccess('Entry fully paid and moved to Paid Report.');
+            } catch (error) {
+                showError(`Error moving entry to paid: ${error.message}`);
+            }
+        }, () => {
+            renderDueList();
+            showError('Operation cancelled.');
+        });
+    } else {
+        try {
+            const { data, error } = await _supabase.from('due_entries').update({ status: value }).match({ id: entryId }).select();
+            if (error) throw error;
+
+            const index = dueEntries.findIndex(e => String(e.id) === String(entryId));
+            dueEntries[index] = {...data[0], isEditing: false};
+
+            renderDueList();
+            showSuccess('Entry status updated.');
+        } catch (error) {
+            showError(`Error updating due entry status: ${error.message}`);
+        }
+    }
+  }
+
+  async function deleteDueEntry(entryId) {
+    showConfirmation('Are you sure you want to delete this entry?', async () => {
+        try {
+            const { error } = await _supabase.from('due_entries').delete().match({ id: entryId });
+            if (error) throw error;
+
+            dueEntries = dueEntries.filter(e => String(e.id) !== String(entryId));
+            renderDueList();
+            showSuccess('Entry deleted successfully');
+        } catch (error) {
+            showError(`Error deleting due entry: ${error.message}`);
+        }
+    });
+  }
+
+  function filterDueList() {
+    currentDueFilter = document.getElementById('dueFilterName').value;
+    document.getElementById('dueSearchInput').value = '';
+    renderDueList();
+  }
+
+  function searchDueList() {
+    const searchTerm = document.getElementById('dueSearchInput').value.toLowerCase().trim();
+    document.getElementById('dueFilterName').value = 'all';
+    currentDueFilter = 'all';
+    if (searchTerm === '') {
+        renderDueList();
+        return;
+    }
+    const filtered = dueEntries.filter(entry => {
+        const nameMatch = entry.name.toLowerCase().includes(searchTerm);
+        const purposeMatch = entry.purpose.toLowerCase().includes(searchTerm);
+        const amountMatch = String(entry.amount).toLowerCase().includes(searchTerm);
+        const dateMatch = entry.date.toLowerCase().includes(searchTerm);
+        return nameMatch || purposeMatch || amountMatch || dateMatch;
+    });
+    renderDueList(filtered);
+  }
+
+  function updateDueTotal(entries) {
+    let total = 0;
+    entries.forEach(e => {
+        if (String(e.status) === 'Due') {
+            total += e.amount;
+        }
+    });
+    document.getElementById('dueTotalAmount').textContent = total.toFixed(2);
+  }
+
+  function exportDuePDF() {
+    const { jsPDF } = window.jspdf;
+    const doc = new jsPDF();
+    let dataToExport = dueEntries;
+    if (currentDueFilter !== 'all') {
+        dataToExport = dataToExport.filter(e => String(e.name) === String(currentDueFilter));
+    }
+    const searchTerm = document.getElementById('dueSearchInput').value.toLowerCase().trim();
+    if (searchTerm !== '') {
+        dataToExport = dataToExport.filter(entry => {
+            const nameMatch = entry.name.toLowerCase().includes(searchTerm);
+            const purposeMatch = entry.purpose.toLowerCase().includes(searchTerm);
+            const amountMatch = String(entry.amount).toLowerCase().includes(searchTerm);
+            const dateMatch = entry.date.toLowerCase().includes(searchTerm);
+            return nameMatch || purposeMatch || amountMatch || dateMatch;
+        });
+    }
+    doc.text('Due List Report', 14, 15);
+    doc.autoTable({
+      startY: 20,
+      head: [['Serial', 'Name', 'Purpose', 'Amount', 'Date', 'Status']],
+      body: dataToExport.map((e, i) => [i + 1, e.name, e.purpose, e.amount, e.date, e.status])
+    });
+    doc.save('due_list_report.pdf');
+    showSuccess('Due List exported as PDF');
+  }
+
+  function exportDueExcel() {
+    const wb = XLSX.utils.book_new();
+    let dataToExport = dueEntries;
+    if (currentDueFilter !== 'all') {
+        dataToExport = dataToExport.filter(e => String(e.name) === String(currentDueFilter));
+    }
+    const searchTerm = document.getElementById('dueSearchInput').value.toLowerCase().trim();
+    if (searchTerm !== '') {
+        dataToExport = dataToExport.filter(entry => {
+            const nameMatch = entry.name.toLowerCase().includes(searchTerm);
+            const purposeMatch = entry.purpose.toLowerCase().includes(searchTerm);
+            const amountMatch = String(entry.amount).toLowerCase().includes(searchTerm);
+            const dateMatch = entry.date.toLowerCase().includes(searchTerm);
+            return nameMatch || purposeMatch || amountMatch || dateMatch;
+        });
+    }
+    const wsData = [
+      ['Serial', 'Name', 'Purpose', 'Amount', 'Date', 'Status'],
+      ...dataToExport.map((e, i) => [i + 1, e.name, e.purpose, e.amount, e.date, e.status])
+    ];
+    const ws = XLSX.utils.aoa_to_sheet(wsData);
+    XLSX.utils.book_append_sheet(wb, ws, 'Due List Report');
+    XLSX.writeFile(wb, 'due_list_report.xlsx');
+    showSuccess('Due List exported as Excel');
+  }
+
+  function renderIncomingList(dataToRender = null) {
+    populateNameDropdowns();
+    const tbody = document.querySelector('#incomingTable tbody');
+    tbody.innerHTML = '';
+    let displayedData = dataToRender;
+    if (displayedData === null) {
+        displayedData = currentIncomingFilter === 'all' ? incomingEntries : incomingEntries.filter(e => String(e.name) === String(currentIncomingFilter));
+    }
+    displayedData.forEach((entry, index) => {
+      const tr = document.createElement('tr');
+      const nameCell = entry.isEditing ? `<select class="form-select" id="editIncomingName-${entry.id}">${getDropdownNamesOptions(entry.name)}</select>` : `<span>${entry.name}</span>`;
+      const purposeCell = entry.isEditing ? `<input type="text" class="form-control" value="${entry.purpose}" id="editIncomingPurpose-${entry.id}" />` : `<span>${entry.purpose}</span>`;
+      const amountCell = entry.isEditing ? `<input type="number" class="form-control" value="${entry.amount}" min="0" step="any" id="editIncomingAmount-${entry.id}" />` : `<span>${entry.amount}</span>`;
+      const dateCell = entry.isEditing ? `<input type="date" class="form-control" value="${entry.date}" id="editIncomingDate-${entry.id}" />` : `<span>${entry.date}</span>`;
+      const statusCell = `
+        <select class="form-select" id="editIncomingStatus-${entry.id}" onchange="updateIncomingEntryStatusFromSelect('${entry.id}', this.value)" ${entry.isEditing ? '' : 'disabled'}>
+          <option value="Due" ${entry.status === 'Due' ? 'selected' : ''}>Due</option>
+          <option value="Paid" ${entry.status === 'Paid' ? 'selected' : ''}>Paid</option>
+        </select>
+      `;
+      tr.innerHTML = `
+        <td>${index + 1}</td>
+        <td>${nameCell}</td>
+        <td>${purposeCell}</td>
+        <td>${amountCell}</td>
+        <td>${dateCell}</td>
+        <td>${statusCell}</td>
+        <td>
+          ${entry.isEditing ? `
+            <button class="btn btn-success btn-sm me-1" onclick="updateIncomingEntry('${entry.id}')">Update</button>
+            <button class="btn btn-secondary btn-sm" onclick="cancelIncomingEdit('${entry.id}')">Cancel</button>
+          ` : `
+            <button class="btn btn-warning btn-sm me-1" onclick="editIncomingEntry('${entry.id}')">Edit</button>
+            <button class="btn btn-danger btn-sm" onclick="deleteIncomingEntry('${entry.id}')">Delete</button>
+          `}
+        </td>
+      `;
+      tbody.appendChild(tr);
+    });
+    updateIncomingTotal(displayedData);
+  }
+
+  async function addIncomingEntry(e) {
+    e.preventDefault();
+    const name = document.getElementById('incomingName').value;
+    const purpose = document.getElementById('incomingPurpose').value.trim();
+    const amount = document.getElementById('incomingAmount').value.trim();
+    const date = document.getElementById('incomingDate').value;
+    const status = document.getElementById('incomingStatus').value;
+    if (!name || !purpose || !amount || !date) {
+      showError('Please fill all required fields');
+      return;
+    }
+    const newEntry = { name, purpose, amount: Number(amount), date, status, category: 'Incoming Funds', original_amount: Number(amount) };
+
+    try {
+      const { data, error } = await _supabase.from('incoming_entries').insert([newEntry]).select();
+      if (error) throw error;
+
+      incomingEntries.push({...data[0], isEditing: false});
+      renderIncomingList();
+      clearIncomingForm();
+      showSuccess('Incoming entry added successfully');
+    } catch (error) {
+      showError(`Error adding incoming entry: ${error.message}`);
+    }
+  }
+
+  function clearIncomingForm() {
+    document.getElementById('incomingEntryForm').reset();
+  }
+
+  function editIncomingEntry(entryId) {
+    incomingEntries = incomingEntries.map(entry => {
+      if (String(entry.id) === String(entryId)) {
+        entry.isEditing = true;
+      } else {
+        entry.isEditing = false;
+      }
+      return entry;
+    });
+    renderIncomingList();
+  }
+
+  function cancelIncomingEdit(entryId) {
+    const entry = incomingEntries.find(e => String(e.id) === String(entryId));
+    if (entry) {
+        entry.isEditing = false;
+        renderIncomingList();
+    }
+  }
+
+  async function updateIncomingEntry(entryId) {
+    const entry = incomingEntries.find(e => String(e.id) === String(entryId));
+    if (!entry) {
+        showError('Entry not found!');
+        renderIncomingList();
+        return;
+    }
+    const newNameInput = document.getElementById(`editIncomingName-${entry.id}`);
+    const newPurposeInput = document.getElementById(`editIncomingPurpose-${entry.id}`);
+    const newAmountInput = document.getElementById(`editIncomingAmount-${entry.id}`);
+    const newDateInput = document.getElementById(`editIncomingDate-${entry.id}`);
+    const newStatusSelect = document.getElementById(`editIncomingStatus-${entry.id}`);
+    if (!newNameInput || !newPurposeInput || !newAmountInput || !newDateInput || !newStatusSelect) {
+        showError('Could not find all input fields for update. Please try again.');
+        return;
+    }
+    const newName = newNameInput.value;
+    const newPurpose = newPurposeInput.value.trim();
+    const newAmount = newAmountInput.value.trim();
+    const newDate = newDateInput.value;
+    const newStatus = newStatusSelect.value;
+    if (!newName || !newPurpose || !newAmount || !newDate) {
+      showError('Please fill all required fields for update');
+      return;
+    }
+
+    const updatedEntry = {
+        name: newName,
+        purpose: newPurpose,
+        amount: Number(newAmount),
+        date: newDate,
+        status: newStatus
+    };
+
+    if (String(newStatus) === 'Paid') {
+        showConfirmation(`Marking this entry as PAID will move it to Paid Report. Are you sure?`, async () => {
+            try {
+                const paidRecord = {
+                    name: newName,
+                    purpose: newPurpose,
+                    amount: Number(newAmount),
+                    date: new Date().toISOString().split('T')[0],
+                    status: 'Paid',
+                    category: 'Incoming Funds',
+                    receipt_number: generateReceiptNumber(),
+                    source_entry_id: entry.id
+                };
+                const { data: paidData, error: paidError } = await _supabase.from('paid_entries').insert([paidRecord]).select();
+                if (paidError) throw paidError;
+                paidEntries.push(paidData[0]);
+
+                const { error: deleteError } = await _supabase.from('incoming_entries').delete().match({ id: entryId });
+                if (deleteError) throw deleteError;
+                incomingEntries = incomingEntries.filter(e => String(e.id) !== String(entryId));
+
+                renderIncomingList();
+                renderPaidReport();
+                showSuccess('Entry fully paid and moved to Paid Report.');
+            } catch (error) {
+                showError(`Error moving entry to paid: ${error.message}`);
+            }
+        }, () => {
+            renderIncomingList();
+            showError('Operation cancelled.');
+        });
+    } else {
+        try {
+            const { data, error } = await _supabase.from('incoming_entries').update(updatedEntry).match({ id: entryId }).select();
+            if (error) throw error;
+
+            const index = incomingEntries.findIndex(e => String(e.id) === String(entryId));
+            incomingEntries[index] = {...data[0], isEditing: false};
+
+            renderIncomingList();
+            showSuccess('Entry updated successfully.');
+        } catch (error) {
+            showError(`Error updating incoming entry: ${error.message}`);
+        }
+    }
+  }
+
+  async function updateIncomingEntryStatusFromSelect(entryId, value) {
+    const entry = incomingEntries.find(e => String(e.id) === String(entryId));
+    if (!entry) {
+        return;
+    }
+    const oldStatus = entry.status;
+    if (String(value) === 'Paid') {
+        showConfirmation(`Marking this entry as PAID will move it to Paid Report. Are you sure?`, async () => {
+            try {
+                const paidRecord = {
+                    name: entry.name,
+                    purpose: entry.purpose,
+                    amount: entry.amount,
+                    date: new Date().toISOString().split('T')[0],
+                    status: 'Paid',
+                    category: 'Incoming Funds',
+                    receipt_number: generateReceiptNumber(),
+                    source_entry_id: entry.id
+                };
+                const { data: paidData, error: paidError } = await _supabase.from('paid_entries').insert([paidRecord]).select();
+                if (paidError) throw paidError;
+                paidEntries.push(paidData[0]);
+
+                const { error: deleteError } = await _supabase.from('incoming_entries').delete().match({ id: entryId });
+                if (deleteError) throw deleteError;
+                incomingEntries = incomingEntries.filter(e => String(e.id) !== String(entryId));
+
+                renderIncomingList();
+                renderPaidReport();
+                showSuccess('Entry fully paid and moved to Paid Report.');
+            } catch (error) {
+                showError(`Error moving entry to paid: ${error.message}`);
+            }
+        }, () => {
+            renderIncomingList();
+            showError('Operation cancelled.');
+        });
+    } else {
+        try {
+            const { data, error } = await _supabase.from('incoming_entries').update({ status: value }).match({ id: entryId }).select();
+            if (error) throw error;
+
+            const index = incomingEntries.findIndex(e => String(e.id) === String(entryId));
+            incomingEntries[index] = {...data[0], isEditing: false};
+
+            renderIncomingList();
+            showSuccess('Entry status updated.');
+        } catch (error) {
+            showError(`Error updating incoming entry status: ${error.message}`);
+        }
+    }
+  }
+
+  async function deleteIncomingEntry(entryId) {
+    showConfirmation('Are you sure you want to delete this entry?', async () => {
+        try {
+            const { error } = await _supabase.from('incoming_entries').delete().match({ id: entryId });
+            if (error) throw error;
+
+            incomingEntries = incomingEntries.filter(e => String(e.id) !== String(entryId));
+            renderIncomingList();
+            showSuccess('Entry deleted successfully');
+        } catch (error) {
+            showError(`Error deleting incoming entry: ${error.message}`);
+        }
+    });
+  }
+
+  function filterIncomingList() {
+    currentIncomingFilter = document.getElementById('incomingFilterName').value;
+    document.getElementById('incomingSearchInput').value = '';
+    renderIncomingList();
+  }
+
+  function searchIncomingList() {
+    const searchTerm = document.getElementById('incomingSearchInput').value.toLowerCase().trim();
+    document.getElementById('incomingFilterName').value = 'all';
+    currentIncomingFilter = 'all';
+    if (searchTerm === '') {
+        renderIncomingList();
+        return;
+    }
+    const filtered = incomingEntries.filter(entry => {
+        const nameMatch = entry.name.toLowerCase().includes(searchTerm);
+        const purposeMatch = entry.purpose.toLowerCase().includes(searchTerm);
+        const amountMatch = String(entry.amount).toLowerCase().includes(searchTerm);
+        const dateMatch = entry.date.toLowerCase().includes(searchTerm);
+        return nameMatch || purposeMatch || amountMatch || dateMatch;
+    });
+    renderIncomingList(filtered);
+  }
+
+  function updateIncomingTotal(entries) {
+    let total = 0;
+    entries.forEach(e => {
+        if (String(e.status) === 'Due') {
+            total += e.amount;
+        }
+    });
+    document.getElementById('incomingTotalAmount').textContent = total.toFixed(2);
+  }
+
+  function exportIncomingPDF() {
+    const { jsPDF } = window.jspdf;
+    const doc = new jsPDF();
+    let dataToExport = incomingEntries;
+    if (currentIncomingFilter !== 'all') {
+        dataToExport = dataToExport.filter(e => String(e.name) === String(currentIncomingFilter));
+    }
+    const searchTerm = document.getElementById('incomingSearchInput').value.toLowerCase().trim();
+    if (searchTerm !== '') {
+        dataToExport = dataToExport.filter(entry => {
+            const nameMatch = entry.name.toLowerCase().includes(searchTerm);
+            const purposeMatch = entry.purpose.toLowerCase().includes(searchTerm);
+            const amountMatch = String(entry.amount).toLowerCase().includes(searchTerm);
+            const dateMatch = entry.date.toLowerCase().includes(searchTerm);
+            return nameMatch || purposeMatch || amountMatch || dateMatch;
+        });
+    }
+    doc.text('Incoming Funds Report', 14, 15);
+    doc.autoTable({
+      startY: 20,
+      head: [['Serial', 'Name', 'Purpose', 'Amount', 'Date', 'Status']],
+      body: dataToExport.map((e, i) => [i + 1, e.name, e.purpose, e.amount, e.date, e.status])
+    });
+    doc.save('incoming_funds_report.pdf');
+    showSuccess('Incoming Funds exported as PDF');
+  }
+
+  function exportIncomingExcel() {
+    const wb = XLSX.utils.book_new();
+    let dataToExport = incomingEntries;
+    if (currentIncomingFilter !== 'all') {
+        dataToExport = dataToExport.filter(e => String(e.name) === String(currentIncomingFilter));
+    }
+    const searchTerm = document.getElementById('incomingSearchInput').value.toLowerCase().trim();
+    if (searchTerm !== '') {
+        dataToExport = dataToExport.filter(entry => {
+            const nameMatch = entry.name.toLowerCase().includes(searchTerm);
+            const purposeMatch = entry.purpose.toLowerCase().includes(searchTerm);
+            const amountMatch = String(entry.amount).toLowerCase().includes(searchTerm);
+            const dateMatch = entry.date.toLowerCase().includes(searchTerm);
+            return nameMatch || purposeMatch || amountMatch || dateMatch;
+        });
+    }
+    const wsData = [
+      ['Serial', 'Name', 'Purpose', 'Amount', 'Date', 'Status'],
+      ...dataToExport.map((e, i) => [i + 1, e.name, e.purpose, e.amount, e.date, e.status])
+    ];
+    const ws = XLSX.utils.aoa_to_sheet(wsData);
+    XLSX.utils.book_append_sheet(wb, ws, 'Incoming Funds Report');
+    XLSX.writeFile(wb, 'incoming_funds_report.xlsx');
+    showSuccess('Incoming Funds exported as Excel');
+  }
+
+  function displayCollectionTable(source) {
+    const container = document.getElementById('dueCollectTableContainer');
+    container.innerHTML = '';
+    let dataToDisplay = [];
+    let tableId = '';
+    let headerText = '';
+    let tableClass = '';
+    if (source === 'due') {
+      dataToDisplay = dueEntries.filter(entry => String(entry.status) === 'Due');
+      tableId = 'dueCollectDueTable';
+      headerText = 'Due List for Collection';
+      tableClass = 'table-primary';
+    } else if (source === 'incoming') {
+      dataToDisplay = incomingEntries.filter(entry => String(entry.status) === 'Due');
+      tableId = 'dueCollectIncomingTable';
+      headerText = 'Incoming Funds for Collection';
+      tableClass = 'table-success';
+    } else {
+      container.innerHTML = '<p class="text-center text-muted p-3">Invalid source selected.</p>';
+      return;
+    }
+    if (dataToDisplay.length === 0) {
+        container.innerHTML = `<p class="text-center text-muted p-3">No pending entries in ${headerText.replace(' for Collection', '')}.</p>`;
+        return;
+    }
+    const tableHTML = `
+      <h5>${headerText}</h5>
+      <table id="${tableId}" class="table table-bordered table-striped align-middle">
+        <thead class="${tableClass}">
+          <tr>
+            <th>Serial</th>
+            <th>Name</th>
+            <th>Purpose</th>
+            <th>Original Amount</th>
+            <th>Current Due</th>
+            <th>Date</th>
+            <th>Collect Amount</th>
+            <th>Actions</th>
+          </tr>
+        </thead>
+        <tbody>
+          ${dataToDisplay.map((entry, index) => `
+            <tr>
+              <td>${index + 1}</td>
+              <td>${entry.name}</td>
+              <td>${entry.purpose}</td>
+              <td>${entry.originalAmount ? entry.originalAmount.toFixed(2) : entry.amount.toFixed(2)}</td>
+              <td>${entry.amount.toFixed(2)}</td>
+              <td>
+                <input type="date" class="form-control form-control-sm" id="collectDate-${source}-${entry.id}" value="${new Date().toISOString().split('T')[0]}">
+              </td>
+              <td>
+                <input type="number" class="form-control form-control-sm" id="collectAmount-${source}-${entry.id}" value="${entry.amount.toFixed(2)}" min="0" step="any" max="${entry.amount.toFixed(2)}">
+              </td>
+              <td>
+                <button class="btn btn-info btn-sm" onclick="collectAmount('${source}', '${entry.id}')">Collect</button>
+              </td>
+            </tr>
+          `).join('')}
+        </tbody>
+      </table>
+    `;
+    container.innerHTML = tableHTML;
+  }
+
+  async function collectAmount(source, entryId) {
+    const collectAmountInput = document.getElementById(`collectAmount-${source}-${entryId}`);
+    const collectDateInput = document.getElementById(`collectDate-${source}-${entryId}`);
+    if (!collectAmountInput || !collectDateInput) {
+        showError('Collection input fields not found.');
+        return;
+    }
+    let collectedAmount = Number(collectAmountInput.value);
+    const collectionDate = collectDateInput.value;
+    if (isNaN(collectedAmount) || collectedAmount <= 0) {
+        showError('Please enter a valid amount to collect.');
+        return;
+    }
+    let entry;
+    let tableName;
+    if (source === 'due') {
+      entry = dueEntries.find(e => String(e.id) === String(entryId));
+      tableName = 'due_entries';
+    } else if (source === 'incoming') {
+      entry = incomingEntries.find(e => String(e.id) === String(entryId));
+        tableName = 'incoming_entries';
+    }
+    if (!entry) {
+      showError('Entry not found for collection! Please refresh and try again.');
+      return;
+    }
+    if (collectedAmount > entry.amount) {
+        collectedAmount = entry.amount;
+        collectAmountInput.value = collectedAmount.toFixed(2);
+        showError(`Collected amount cannot exceed current due. Adjusted to ${collectedAmount.toFixed(2)}.`);
+    }
+    showConfirmation(`Collect ${collectedAmount.toFixed(2)} from ${entry.name} (${entry.purpose})?`, async () => {
+        const remainingAmount = entry.amount - collectedAmount;
+        const paidRecord = {
+            source_entry_id: entry.id,
+            name: entry.name,
+            purpose: `${cleanPurpose(entry.purpose)} (Collected: ${collectedAmount.toFixed(2)})`,
+            amount: collectedAmount,
+            date: collectionDate,
+            status: 'Paid',
+            category: entry.category,
+            receipt_number: generateReceiptNumber()
+        };
+
+        try {
+            const { data: paidData, error: paidError } = await _supabase.from('paid_entries').insert([paidRecord]).select();
+            if (paidError) throw paidError;
+            paidEntries.push(paidData[0]);
+
+            if (remainingAmount <= 0.01) {
+                const { error: deleteError } = await _supabase.from(tableName).delete().match({ id: entryId });
+                if (deleteError) throw deleteError;
+
+                if (source === 'due') {
+                    dueEntries = dueEntries.filter(e => String(e.id) !== String(entryId));
+                } else if (source === 'incoming') {
+                    incomingEntries = incomingEntries.filter(e => String(e.id) !== String(entryId));
+                }
+                showSuccess('Amount fully collected and entry moved to Paid Report.');
+            } else {
+                const { data: updatedData, error: updateError } = await _supabase.from(tableName).update({ amount: remainingAmount }).match({ id: entryId }).select();
+                if (updateError) throw updateError;
+
+                entry.amount = remainingAmount;
+                showSuccess(`Amount collected. Remaining due for ${entry.name}: ${remainingAmount.toFixed(2)}.`);
+            }
+
+            renderDueList();
+            renderIncomingList();
+            renderPaidReport();
+            displayCollectionTable(source);
+        } catch (error) {
+            showError(`Error collecting amount: ${error.message}`);
+        }
+    });
+  }
+
+  function renderPaidReport(dataToRender = null) {
+    populatePaidCategoryFilter();
+    const tbody = document.querySelector('#paidTable tbody');
+    tbody.innerHTML = '';
+    let displayedData = dataToRender;
+    if (displayedData === null) {
+        displayedData = currentPaidFilterCategory === 'all' ? paidEntries : paidEntries.filter(e => String(e.category) === String(currentPaidFilterCategory));
+    }
+    displayedData.forEach((entry, index) => {
+      const tr = document.createElement('tr');
+      tr.innerHTML = `
+        <td>${index + 1}</td>
+        <td>${entry.receiptNumber}</td>
+        <td>${entry.name}</td>
+        <td>${entry.purpose}</td>
+        <td>${entry.amount.toFixed(2)}</td>
+        <td>${entry.date}</td>
+        <td>${entry.status}</td>
+        <td>${entry.category}</td>
+        <td>
+          <button class="btn btn-danger btn-sm" onclick="deletePaidEntry('${entry.id}')">Delete</button>
+        </td>
+      `;
+      tbody.appendChild(tr);
+    });
+    document.getElementById('paidCount').textContent = displayedData.length;
+  }
+
+  function populatePaidCategoryFilter() {
+    const paidFilterCategorySelect = document.getElementById('paidFilterCategory');
+    let categories = new Set(paidEntries.map(entry => entry.category));
+    let currentValue = paidFilterCategorySelect.value;
+    paidFilterCategorySelect.innerHTML = '<option value="all">All</option>';
+    categories.forEach(category => {
+      const option = document.createElement('option');
+      option.value = category;
+      option.textContent = category;
+      paidFilterCategorySelect.appendChild(option);
+    });
+    if (categories.has(currentValue)) {
+        paidFilterCategorySelect.value = currentValue;
+    } else {
+        paidFilterCategorySelect.value = 'all';
+    }
+    currentPaidFilterCategory = paidFilterCategorySelect.value;
+  }
+
+  async function deletePaidEntry(entryId) {
+    showConfirmation('Are you sure you want to delete this paid entry? This action cannot be undone.', async () => {
+        try {
+            const { error } = await _supabase.from('paid_entries').delete().match({ id: entryId });
+            if (error) throw error;
+
+            paidEntries = paidEntries.filter(e => String(e.id) !== String(entryId));
+            renderPaidReport();
+            showSuccess('Paid entry deleted successfully');
+        } catch (error) {
+            showError(`Error deleting paid entry: ${error.message}`);
+        }
+    });
+  }
+
+  function filterPaidList() {
+    currentPaidFilterCategory = document.getElementById('paidFilterCategory').value;
+    document.getElementById('paidSearchInput').value = '';
+    renderPaidReport();
+  }
+
+  function searchPaidReport() {
+    const searchTerm = document.getElementById('paidSearchInput').value.toLowerCase().trim();
+    document.getElementById('paidFilterCategory').value = 'all';
+    currentPaidFilterCategory = 'all';
+    if (searchTerm === '') {
+        renderPaidReport();
+        return;
+    }
+    const filtered = paidEntries.filter(entry => {
+        const receiptMatch = entry.receiptNumber ? entry.receiptNumber.toLowerCase().includes(searchTerm) : false;
+        const nameMatch = entry.name.toLowerCase().includes(searchTerm);
+        const purposeMatch = entry.purpose.toLowerCase().includes(searchTerm);
+        const amountMatch = String(entry.amount).toLowerCase().includes(searchTerm);
+        const dateMatch = entry.date.toLowerCase().includes(searchTerm);
+        const categoryMatch = entry.category.toLowerCase().includes(searchTerm);
+        return receiptMatch || nameMatch || purposeMatch || amountMatch || dateMatch || categoryMatch;
+    });
+    renderPaidReport(filtered);
+  }
+
+  function exportPaidPDF() {
+    const { jsPDF } = window.jspdf;
+    const doc = new jsPDF();
+    let dataToExport = paidEntries;
+    if (currentPaidFilterCategory !== 'all') {
+        dataToExport = dataToExport.filter(e => String(e.category) === String(currentPaidFilterCategory));
+    }
+    const searchTerm = document.getElementById('paidSearchInput').value.toLowerCase().trim();
+    if (searchTerm !== '') {
+        dataToExport = dataToExport.filter(entry => {
+            const receiptMatch = entry.receiptNumber ? entry.receiptNumber.toLowerCase().includes(searchTerm) : false;
+            const nameMatch = entry.name.toLowerCase().includes(searchTerm);
+            const purposeMatch = entry.purpose.toLowerCase().includes(searchTerm);
+            const amountMatch = String(entry.amount).toLowerCase().includes(searchTerm);
+            const dateMatch = entry.date.toLowerCase().includes(searchTerm);
+            const categoryMatch = entry.category.toLowerCase().includes(searchTerm);
+            return receiptMatch || nameMatch || purposeMatch || amountMatch || dateMatch || categoryMatch;
+        });
+    }
+    doc.text('Paid Report', 14, 15);
+    doc.autoTable({
+      startY: 20,
+      head: [['Serial', 'Receipt No.', 'Name', 'Purpose', 'Amount', 'Date', 'Status', 'Category']],
+      body: dataToExport.map((e, i) => [i + 1, e.receiptNumber, e.name, e.purpose, e.amount, e.date, e.status, e.category])
+    });
+    doc.save('paid_report.pdf');
+    showSuccess('Paid Report exported as PDF');
+  }
+
+  function exportPaidExcel() {
+    const wb = XLSX.utils.book_new();
+    let dataToExport = paidEntries;
+    if (currentPaidFilterCategory !== 'all') {
+        dataToExport = dataToExport.filter(e => String(e.category) === String(currentPaidFilterCategory));
+    }
+    const searchTerm = document.getElementById('paidSearchInput').value.toLowerCase().trim();
+    if (searchTerm !== '') {
+        dataToExport = dataToExport.filter(entry => {
+            const receiptMatch = entry.receiptNumber ? entry.receiptNumber.toLowerCase().includes(searchTerm) : false;
+            const nameMatch = entry.name.toLowerCase().includes(searchTerm);
+            const purposeMatch = entry.purpose.toLowerCase().includes(searchTerm);
+            const amountMatch = String(entry.amount).toLowerCase().includes(searchTerm);
+            const dateMatch = entry.date.toLowerCase().includes(searchTerm);
+            const categoryMatch = entry.category.toLowerCase().includes(searchTerm);
+            return receiptMatch || nameMatch || purposeMatch || amountMatch || dateMatch || categoryMatch;
+        });
+    }
+    const wsData = [
+      ['Serial', 'Receipt No.', 'Name', 'Purpose', 'Amount', 'Date', 'Status', 'Category'],
+      ...dataToExport.map((e, i) => [i + 1, e.receiptNumber, e.name, e.purpose, e.amount, e.date, e.status, e.category])
+    ];
+    const ws = XLSX.utils.aoa_to_sheet(wsData);
+    XLSX.utils.book_append_sheet(wb, ws, 'Paid Report');
+    XLSX.writeFile(wb, 'paid_report.xlsx');
+    showSuccess('Paid Report exported as Excel');
+  }
+
+  async function addLoginUser(e) {
+    e.preventDefault();
+    const username = document.getElementById('newUsernameInput').value.trim();
+    const password = document.getElementById('newPasswordInput').value.trim();
+    const securityQuestion = document.getElementById('newSecurityQuestionInput').value;
+    const securityAnswer = document.getElementById('newSecurityAnswerInput').value.trim();
+    if (loginUsers.some(user => user.username === username)) {
+      showError('Username already exists!');
+      return;
+    }
+    if (!username || !password || !securityQuestion || !securityAnswer) {
+      showError('Please fill all fields to add a new user.');
+      return;
+    }
+    
+    const newUser = {
+        username,
+        password,
+        security_question: securityQuestion,
+        security_answer: securityAnswer
+    };
+
+    try {
+        const { data, error } = await _supabase.from('login_users').insert([newUser]).select();
+        if (error) throw error;
+
+        loginUsers.push(data[0]);
+        showSuccess('Login user added successfully!');
+        document.getElementById('addLoginForm').reset();
+        closeLoginUserModal();
+        showLoginUsers();
+    } catch (error) {
+        showError(`Error adding login user: ${error.message}`);
+    }
+  }
+
+  function showLoginUsers() {
+    const list = document.getElementById('loginUserList');
+    list.innerHTML = '';
+    loginUsers.forEach((user, index) => {
+      const li = document.createElement('li');
+      li.className = 'list-group-item d-flex justify-content-between align-items-center';
+      li.innerHTML = `
+        <span>Username: ${user.username} (Password: ${user.password})<br>
+        Security Q: ${user.securityQuestion || 'N/A'}<br>
+        Security A: ${user.securityAnswer || 'N/A'}</span>
+        <div>
+          <button class="btn btn-warning btn-sm me-2" onclick="editLoginUser(${index})">Edit</button>
+          <button class="btn btn-danger btn-sm" onclick="confirmDeleteLoginUser(${index})">Delete</button>
+        </div>
+      `;
+      list.appendChild(li);
+    });
+    loginUserModal.show();
+  }
+
+  function closeLoginUserModal() {
+    loginUserModal.hide();
+  }
+
+  function editLoginUser(index) {
+    const user = loginUsers[index];
+    if (user) {
+      document.getElementById('editUserIndex').value = index;
+      document.getElementById('editUsernameInput').value = user.username;
+      document.getElementById('editPasswordInput').value = '';
+      document.getElementById('editSecurityQuestionInput').value = user.securityQuestion || '';
+      document.getElementById('editSecurityAnswerInput').value = user.securityAnswer || '';
+      editLoginUserModal.show();
+    }
+  }
+
+  async function saveEditedLoginUser() {
+    const index = document.getElementById('editUserIndex').value;
+    const user = loginUsers[index];
+    if (user) {
+      const newUsername = document.getElementById('editUsernameInput').value.trim();
+      const newPassword = document.getElementById('editPasswordInput').value.trim();
+      const newSecurityQuestion = document.getElementById('editSecurityQuestionInput').value;
+      const newSecurityAnswer = document.getElementById('editSecurityAnswerInput').value.trim();
+      if (loginUsers.some((u, i) => i !== Number(index) && u.username === newUsername)) {
+        showError('Username already exists!');
+        return;
+      }
+
+      const updatedUser = {
+          username: newUsername,
+          security_question: newSecurityQuestion,
+          security_answer: newSecurityAnswer
+      };
+
+      if (newPassword) {
+          updatedUser.password = newPassword;
+      }
+
+      try {
+          const { data, error } = await _supabase.from('login_users').update(updatedUser).match({ id: user.id }).select();
+          if (error) throw error;
+
+          loginUsers[index] = data[0];
+          editLoginUserModal.hide();
+          showSuccess('Login user updated successfully!');
+          showLoginUsers();
+      } catch (error) {
+          showError(`Error updating login user: ${error.message}`);
+      }
+    }
+  }
+
+  function confirmDeleteLoginUser(index) {
+    showConfirmation('Are you sure you want to delete this login user? This action cannot be undone.', () => {
+      deleteLoginUser(index);
+    });
+  }
+
+  async function deleteLoginUser(index) {
+    const userToDelete = loginUsers[index];
+    if (userToDelete.username === 'admin' && loginUsers.length > 1) {
+      showError('Cannot delete the default "admin" user if other users exist. Please create another admin user first.');
+      return;
+    }
+    if (loginUsers.length === 1 && userToDelete.username === 'admin') {
+      showError('Cannot delete the only "admin" user. At least one admin user must exist.');
+      return;
+    }
+    if (userToDelete.username === loggedInUser) {
+      showError('You cannot delete your own active login session. Please log out first if you wish to delete this account.');
+      return;
+    }
+
+    try {
+        const { error } = await _supabase.from('login_users').delete().match({ id: userToDelete.id });
+        if (error) throw error;
+
+        loginUsers.splice(index, 1);
+        showSuccess('Login user deleted successfully!');
+        showLoginUsers();
+    } catch (error) {
+        showError(`Error deleting login user: ${error.message}`);
+    }
+  }
+
+  async function addDropdownName(e) {
+    e.preventDefault();
+    const name = document.getElementById('newDropdownNameInput').value.trim();
+    if (name && !dropdownNames.includes(name)) {
+        try {
+            const { data, error } = await _supabase.from('dropdown_names').insert([{ name }]).select();
+            if (error) throw error;
+
+            dropdownNames.push(data[0].name);
+            populateNameDropdowns();
+            showSuccess('Name added to dropdowns!');
+            document.getElementById('addDropdownNameForm').reset();
+        } catch (error) {
+            showError(`Error adding dropdown name: ${error.message}`);
+        }
+    } else if (dropdownNames.includes(name)) {
+      showError('Name already exists in dropdowns!');
+    } else {
+      showError('Please enter a name.');
+    }
+  }
+
+  function showDropdownNames() {
+    const list = document.getElementById('dropdownNameList');
+    list.innerHTML = '';
+    dropdownNames.forEach((name, index) => {
+      const li = document.createElement('li');
+      li.className = 'list-group-item d-flex justify-content-between align-items-center';
+      li.innerHTML = `
+        <span>${name}</span>
+        <button class="btn btn-danger btn-sm" onclick="confirmDeleteDropdownName(${index})">Delete</button>
+      `;
+      list.appendChild(li);
+    });
+    dropdownNameModal.show();
+  }
+
+  function closeDropdownNameModal() {
+    dropdownNameModal.hide();
+  }
+
+  function confirmDeleteDropdownName(index) {
+    showConfirmation('Are you sure you want to delete this name from dropdowns? This will not affect existing entries but the name will no longer appear as an option.', () => {
+      deleteDropdownName(index);
+    });
+  }
+
+  async function deleteDropdownName(index) {
+    const nameToDelete = dropdownNames[index];
+    try {
+        const { error } = await _supabase.from('dropdown_names').delete().match({ name: nameToDelete });
+        if (error) throw error;
+
+        dropdownNames.splice(index, 1);
+        populateNameDropdowns();
+        showSuccess('Name deleted from dropdowns!');
+        showDropdownNames();
+    } catch (error) {
+        showError(`Error deleting dropdown name: ${error.message}`);
+    }
+  }
+
+  function backupDatabase() {
+    const data = {
+      dueEntries: dueEntries,
+      incomingEntries: incomingEntries,
+      paidEntries: paidEntries,
+      loginUsers: loginUsers,
+      dropdownNames: dropdownNames,
+      receiptCounter: receiptCounter
+    };
+    const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `mahdi_due_tracker_backup_${new Date().toISOString().split('T')[0]}.json`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+    showSuccess('Database backed up successfully!');
+  }
+
+  function restoreDatabase(event) {
+    const file = event.target.files[0];
+    if (file) {
+      const reader = new FileReader();
+      reader.onload = function(e) {
+        try {
+          const restoredData = JSON.parse(e.target.result);
+          showConfirmation('Restoring the database will overwrite all current data. Are you sure?', () => {
+            dueEntries = restoredData.dueEntries || [];
+            incomingEntries = restoredData.incomingEntries || [];
+            paidEntries = restoredData.paidEntries || [];
+            loginUsers = restoredData.loginUsers || [];
+            dropdownNames = restoredData.dropdownNames || [];
+            receiptCounter = restoredData.receiptCounter || 0;
+            if (loginUsers.length === 0 || !loginUsers.some(user => user.username === 'admin')) {
+                loginUsers.push({ username: 'admin', password: 'password', securityQuestion: 'We need your number to proceed — could you confirm it?', securityAnswer: 'admin' });
+            } else {
+                loginUsers = loginUsers.map(user => {
+                    if (user.securityQuestion === undefined) user.securityQuestion = '';
+                    if (user.securityAnswer === undefined) user.securityAnswer = '';
+                    return user;
+                });
+            }
+            saveData();
+            loadData();
+            renderDueList();
+            renderIncomingList();
+            renderPaidReport();
+            populateNameDropdowns();
+            populatePaidCategoryFilter();
+            checkLoginStatus();
+            showSuccess('Database restored successfully!');
+          }, () => {
+            showError('Database restore cancelled.');
+          });
+        } catch (error) {
+          showError('Failed to parse JSON file: ' + error.message);
+        }
+      };
+      reader.readAsText(file);
+      event.target.value = '';
+    }
+  }
+
+  function showSuccess(message) {
+    successModalBody.textContent = message;
+    successModal.show();
+    setTimeout(() => successModal.hide(), 2000);
+  }
+
+  function showError(message) {
+    errorModalBody.textContent = message;
+    errorModal.show();
+    setTimeout(() => errorModal.hide(), 3000);
+  }
+
+  function showConfirmation(message, callback, cancelCallback = null) {
+    confirmationModalBody.textContent = message;
+    confirmCallback = callback;
+    confirmActionButton.onclick = () => {
+      if (confirmCallback) {
+        confirmCallback();
+      }
+      confirmationModal.hide();
+    };
+    const cancelButton = document.querySelector('#confirmationModal .btn-secondary');
+    if (cancelCallback) {
+        cancelButton.onclick = () => {
+            cancelCallback();
+            confirmationModal.hide();
+        };
+    } else {
+        cancelButton.onclick = () => {
+            confirmationModal.hide();
+        };
+    }
+    confirmationModal.show();
+  }
+
+  function showForgotPasswordModal() {
+    document.getElementById('resetPasswordForm').reset();
+    forgotPasswordModal.show();
+  }
+
+  async function resetPassword(e) {
+    e.preventDefault();
+    const username = document.getElementById('resetUsernameInput').value.trim();
+    const securityQuestion = document.getElementById('resetSecurityQuestionInput').value;
+    const securityAnswer = document.getElementById('resetSecurityAnswerInput').value.trim();
+    const newPassword = document.getElementById('newPasswordResetInput').value.trim();
+    const confirmPassword = document.getElementById('confirmPasswordResetInput').value.trim();
+    const user = loginUsers.find(u => u.username === username);
+    if (!user) {
+      showError('User not found.');
+      return;
+    }
+    if (user.securityQuestion !== securityQuestion || user.securityAnswer.toLowerCase() !== securityAnswer.toLowerCase()) {
+      showError('Incorrect security question or answer.');
+      return;
+    }
+    if (newPassword !== confirmPassword) {
+      showError('New password and confirm password do not match.');
+      return;
+    }
+    if (newPassword.length < 1) {
+        showError('New password cannot be empty.');
+        return;
+    }
+
+    try {
+        const { error } = await _supabase.from('login_users').update({ password: newPassword }).match({ id: user.id });
+        if (error) throw error;
+
+        user.password = newPassword;
+        forgotPasswordModal.hide();
+        showSuccess('Password reset successfully! You can now log in with your new password.');
+        document.getElementById('loginForm').reset();
+        document.getElementById('loginError').style.display = 'none';
+    } catch (error) {
+        showError(`Error resetting password: ${error.message}`);
+    }
+  }
+</script>
+</body>
+</html>
